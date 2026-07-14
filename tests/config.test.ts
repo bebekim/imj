@@ -63,3 +63,15 @@ test('slugify cleans up text appropriately', () => {
   assert.strictEqual(config.slugify('study'), 'study');
   assert.strictEqual(config.slugify('  Foo Bar!! '), 'foo-bar');
 });
+
+test('normalizeUrl strips query parameters for YouTube links', () => {
+  const yt1 = 'https://www.youtube.com/watch?v=QDeGyYvyNqs&list=RDQDeGyYvyNqs&start_radio=1';
+  const yt2 = 'https://www.youtube.com/watch?v=QDeGyYvyNqs&list=RDQDeGyYvyNqs';
+  const ytShort = 'https://youtu.be/QDeGyYvyNqs?list=RDQDeGyYvyNqs';
+  const general = 'https://example.com/audio.mp3?list=123';
+
+  assert.strictEqual(config.normalizeUrl(yt1), 'https://www.youtube.com/watch?v=QDeGyYvyNqs');
+  assert.strictEqual(config.normalizeUrl(yt2), 'https://www.youtube.com/watch?v=QDeGyYvyNqs');
+  assert.strictEqual(config.normalizeUrl(ytShort), 'https://www.youtube.com/watch?v=QDeGyYvyNqs');
+  assert.strictEqual(config.normalizeUrl(general), 'https://example.com/audio.mp3?list=123');
+});

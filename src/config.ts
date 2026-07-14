@@ -74,3 +74,23 @@ export function defaultPlaylistName(cfg?: Record<string, any> | null): string {
   const finalCfg = cfg ?? loadConfig();
   return finalCfg.default_playlist ?? DEFAULT_PLAYLIST;
 }
+
+export function normalizeUrl(urlString: string): string {
+  try {
+    const url = new URL(urlString);
+    if (url.hostname.includes('youtube.com') || url.hostname === 'youtu.be') {
+      let videoId = '';
+      if (url.hostname === 'youtu.be') {
+        videoId = url.pathname.substring(1);
+      } else {
+        videoId = url.searchParams.get('v') || '';
+      }
+      if (videoId) {
+        return `https://www.youtube.com/watch?v=${videoId}`;
+      }
+    }
+    return urlString;
+  } catch {
+    return urlString;
+  }
+}

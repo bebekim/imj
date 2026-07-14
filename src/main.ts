@@ -49,8 +49,9 @@ export function createProgram(): Command {
       const cfg = config.loadConfig();
       const pname = options.playlist || config.defaultPlaylistName(cfg);
       const p = config.stagingPath(cfg);
-      staging.prependEntry(p, url, pname);
-      console.log(`Staged '${url}' for playlist '${pname}'.`);
+      const normalized = config.normalizeUrl(url);
+      staging.prependEntry(p, normalized, pname);
+      console.log(`Staged '${normalized}' for playlist '${pname}'.`);
     });
 
   program

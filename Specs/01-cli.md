@@ -103,6 +103,7 @@ URL1	playlist1
 Behavior:
 
 - Each new entry is inserted at the top.
+- URLs are preprocessed and normalized (e.g., stripping YouTube playlist parameters like `list`, `index`, and `start_radio`) before being written to staging or database insertion to avoid duplicates of the same video.
 - Each entry records at least URL and playlist name.
 - Entries are tab-separated: `URL<TAB>playlist_name`.
 - The staging file may be manually edited.
