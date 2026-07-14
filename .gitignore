@@ -4,3 +4,4 @@ dist/
 .sandcastle/
 .DS_Store
 *.log
+Specs/
