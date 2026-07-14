@@ -1,0 +1,22 @@
+{
+  "name": "imj",
+  "version": "0.1.0",
+  "description": "Local music URL playlist manager with mpv playback (interviews, music, jokes)",
+  "type": "module",
+  "bin": {
+    "imj": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "start": "node --import tsx src/cli.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

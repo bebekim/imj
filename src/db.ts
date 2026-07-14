@@ -1,0 +1,94 @@
+import { DatabaseSync } from 'node:sqlite';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as config from './config.js';
+
+export const SCHEMA = `
+CREATE TABLE IF NOT EXISTS songs (
+  id integer primary key,
+  url text not null unique,
+  title text
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+  id integer primary key,
+  name text not null unique,
+  slug text not null unique
+);
+
+CREATE TABLE IF NOT EXISTS playlist_songs (
+  playlist_id integer not null references playlists(id),
+  song_id integer not null references songs(id),
+  position integer,
+  primary key (playlist_id, song_id)
+);
+
+CREATE TABLE IF NOT EXISTS play_history (
+  id integer primary key,
+  song_id integer not null references songs(id),
+  played_at text not null
+);
+`;
+
+export function connect(cfg?: Record<string, any> | null): DatabaseSync {
+  const p = config.dbPath(cfg);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const conn = new DatabaseSync(p);
+  conn.exec(SCHEMA);
+  return conn;
+}
+
+export function getOrCreatePlaylist(conn: DatabaseSync, name: string): number {
+  const slug = config.slugify(name);
+  const row = conn.prepare('SELECT id FROM playlists WHERE name = ?').get(name) as any;
+  if (row) {
+    return row.id;
+  }
+  conn.prepare('INSERT INTO playlists (name, slug) VALUES (?, ?)').run(name, slug);
+  const lastRow = conn.prepare('SELECT last_insert_rowid() as id').get() as any;
+  return lastRow.id;
+}
+
+export function getPlaylistByName(conn: DatabaseSync, name: string): any {
+  return conn.prepare('SELECT * FROM playlists WHERE name = ?').get(name);
+}
+
+export function addSongToPlaylist(conn: DatabaseSync, url: string, playlistName: string, title?: string | null): boolean {
+  const pid = getOrCreatePlaylist(conn, playlistName);
+  let song = conn.prepare('SELECT id FROM songs WHERE url = ?').get(url) as any;
+  let sid: number;
+  if (song) {
+    sid = song.id;
+    if (title) {
+      conn.prepare('UPDATE songs SET title = ? WHERE id = ?').run(title, sid);
+    }
+  } else {
+    conn.prepare('INSERT INTO songs (url, title) VALUES (?, ?)').run(url, title ?? null);
+    const lastRow = conn.prepare('SELECT last_insert_rowid() as id').get() as any;
+    sid = lastRow.id;
+  }
+
+  const existing = conn.prepare('SELECT 1 FROM playlist_songs WHERE playlist_id = ? AND song_id = ?').get(pid, sid);
+  if (existing) {
+    return false;
+  }
+
+  const maxPosRow = conn.prepare('SELECT COALESCE(MAX(position), 0) as max_pos FROM playlist_songs WHERE playlist_id = ?').get(pid) as any;
+  const pos = maxPosRow.max_pos + 1;
+  conn.prepare('INSERT INTO playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)').run(pid, sid, pos);
+  return true;
+}
+
+export function listPlaylists(conn: DatabaseSync): any[] {
+  return conn.prepare('SELECT name, slug FROM playlists ORDER BY name').all();
+}
+
+export function playlistUrls(conn: DatabaseSync, playlistName: string): any[] {
+  return conn.prepare(`
+    SELECT s.url, s.title FROM songs s
+    JOIN playlist_songs ps ON ps.song_id = s.id
+    JOIN playlists p ON p.id = ps.playlist_id
+    WHERE p.name = ?
+    ORDER BY ps.position
+  `).all(playlistName);
+}

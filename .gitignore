@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.agent-learning/
+.sandcastle/
+.DS_Store
+*.log
