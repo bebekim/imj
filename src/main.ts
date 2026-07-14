@@ -5,6 +5,7 @@ import * as config from './config.js';
 import * as db from './db.js';
 import * as staging from './staging.js';
 import { player } from './player.js';
+import { createBot, runCleanup } from './bot.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -170,6 +171,23 @@ export function createProgram(): Command {
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, rows.map((r) => r.url).join('\n') + '\n', 'utf8');
       player.playPlaylist(out);
+    });
+
+  program
+    .command('bot-start')
+    .description('Start the Telegram Bot daemon.')
+    .requiredOption('--token <string>', 'Telegram Bot API token.')
+    .requiredOption('--user-id <number>', 'Allowed Telegram user ID.', parseInt)
+    .action((options) => {
+      const bot = createBot(options.token, options.userId);
+      bot.start();
+      console.log('Telegram Bot daemon started successfully.');
+
+      setInterval(() => {
+        runCleanup(bot);
+      }, 3600000);
+
+      runCleanup(bot);
     });
 
   return program;

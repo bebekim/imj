@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS play_history (
   song_id integer not null references songs(id),
   played_at text not null
 );
+
+CREATE TABLE IF NOT EXISTS sent_messages (
+  message_id integer not null,
+  chat_id integer not null,
+  sent_at text not null,
+  primary key (message_id, chat_id)
+);
 `;
 
 export function connect(cfg?: Record<string, any> | null): DatabaseSync {
@@ -91,4 +98,20 @@ export function playlistUrls(conn: DatabaseSync, playlistName: string): any[] {
     WHERE p.name = ?
     ORDER BY ps.position
   `).all(playlistName);
+}
+
+export function recordSentMessage(conn: DatabaseSync, messageId: number, chatId: number, sentAt: string): void {
+  conn.prepare('INSERT OR REPLACE INTO sent_messages (message_id, chat_id, sent_at) VALUES (?, ?, ?)')
+    .run(messageId, chatId, sentAt);
+}
+
+export function getExpiredSentMessages(conn: DatabaseSync): any[] {
+  return conn.prepare(`
+    SELECT message_id, chat_id FROM sent_messages
+    WHERE datetime(sent_at) < datetime('now', '-24 hours')
+  `).all();
+}
+
+export function deleteSentMessageRecord(conn: DatabaseSync, messageId: number, chatId: number): void {
+  conn.prepare('DELETE FROM sent_messages WHERE message_id = ? AND chat_id = ?').run(messageId, chatId);
 }
