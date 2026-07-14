@@ -43,15 +43,49 @@ export function createProgram(): Command {
 
   program
     .command('add <url>')
-    .description('Add a URL to the staging file (newest-first). Does not write to SQLite.')
+    .description('Add a URL or YouTube playlist URL to the staging file (newest-first). Does not write to SQLite.')
     .option('--playlist <name>', 'Target playlist name.')
     .action((url, options) => {
       const cfg = config.loadConfig();
       const pname = options.playlist || config.defaultPlaylistName(cfg);
       const p = config.stagingPath(cfg);
-      const normalized = config.normalizeUrl(url);
-      staging.prependEntry(p, normalized, pname);
-      console.log(`Staged '${normalized}' for playlist '${pname}'.`);
+
+      const isPlaylist = (() => {
+        try {
+          const parsed = new URL(url);
+          return parsed.hostname.includes('youtube.com') && parsed.pathname === '/playlist' && parsed.searchParams.has('list');
+        } catch {
+          return false;
+        }
+      })();
+
+      if (isPlaylist) {
+        if (!player.ytDlpAvailable()) {
+          console.error('Error: yt-dlp is required to expand YouTube playlists.');
+          process.exit(1);
+        }
+        console.log(`Extracting videos from playlist '${url}'...`);
+        try {
+          const videoUrls = player.extractPlaylistUrls(url);
+          if (videoUrls.length === 0) {
+            console.log('No videos found in the playlist.');
+            return;
+          }
+          // Prepend in reverse order so they are processed in correct order top-to-bottom
+          for (let i = videoUrls.length - 1; i >= 0; i--) {
+            const normalized = config.normalizeUrl(videoUrls[i]);
+            staging.prependEntry(p, normalized, pname);
+          }
+          console.log(`Staged ${videoUrls.length} videos from playlist for playlist '${pname}'.`);
+        } catch (err: any) {
+          console.error(`Error expanding playlist: ${err.message}`);
+          process.exit(1);
+        }
+      } else {
+        const normalized = config.normalizeUrl(url);
+        staging.prependEntry(p, normalized, pname);
+        console.log(`Staged '${normalized}' for playlist '${pname}'.`);
+      }
     });
 
   program

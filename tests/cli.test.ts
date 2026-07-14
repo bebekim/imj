@@ -87,6 +87,39 @@ test('add command defaults to the default playlist', async (t) => {
   }
 });
 
+test('add command expands YouTube playlists using yt-dlp', async (t) => {
+  const env = createIsolatedEnv();
+  const logMock = t.mock.method(console, 'log', () => {});
+  
+  t.mock.method(player, 'ytDlpAvailable', () => true);
+  t.mock.method(player, 'extractPlaylistUrls', (url: string) => {
+    assert.strictEqual(url, 'https://www.youtube.com/playlist?list=PLRW80bBvVD3UXB_ExupmVqzTUh3vqlxe9');
+    return [
+      'https://www.youtube.com/watch?v=1',
+      'https://www.youtube.com/watch?v=2'
+    ];
+  });
+
+  const program = createProgram();
+  program.exitOverride();
+  try {
+    await program.parseAsync(['node', 'imj', 'setup', '--music-dir', env.musicDir]);
+    await program.parseAsync([
+      'node', 'imj', 'add', 
+      'https://www.youtube.com/playlist?list=PLRW80bBvVD3UXB_ExupmVqzTUh3vqlxe9', 
+      '--playlist', 'study'
+    ]);
+    
+    const entries = staging.readEntries(config.stagingPath());
+    assert.deepStrictEqual(entries, [
+      ['https://www.youtube.com/watch?v=1', 'study'],
+      ['https://www.youtube.com/watch?v=2', 'study']
+    ]);
+  } finally {
+    env.cleanup();
+  }
+});
+
 test('import-staging validates and imports working non-duplicate URLs', async (t) => {
   const env = createIsolatedEnv();
   const logMock = t.mock.method(console, 'log', () => {});

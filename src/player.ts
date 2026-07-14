@@ -40,9 +40,44 @@ export function playPlaylist(playlistFile: string): number {
   return result.status ?? 1;
 }
 
+export function ytDlpAvailable(): boolean {
+  try {
+    deps.execSync('which yt-dlp', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function extractPlaylistUrls(playlistUrl: string): string[] {
+  if (!ytDlpAvailable()) {
+    throw new Error('yt-dlp needs to be installed to extract playlists.');
+  }
+  try {
+    const result = deps.spawnSync('yt-dlp', [
+      '--flat-playlist',
+      '--print', '%(url)s',
+      playlistUrl
+    ], { encoding: 'utf8' });
+
+    if (result.status !== 0) {
+      throw new Error(`yt-dlp failed with exit code ${result.status}`);
+    }
+
+    const lines = (result.stdout ?? '').split('\n');
+    return lines
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+  } catch (err: any) {
+    throw new Error(`Failed to extract playlist: ${err.message}`);
+  }
+}
+
 // Group into a mockable player object
 export const player = {
   mpvAvailable,
   validateUrl,
   playPlaylist,
+  ytDlpAvailable,
+  extractPlaylistUrls,
 };
