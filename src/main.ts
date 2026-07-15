@@ -5,6 +5,7 @@ import * as config from './config.js';
 import * as db from './db.js';
 import * as staging from './staging.js';
 import { player } from './player.js';
+import { playbackConsole } from './interactive.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -186,24 +187,13 @@ export function createProgram(): Command {
 
   program
     .command('play <name>')
-    .description('Play a playlist with mpv (no video, infinite loop).')
-    .action((name) => {
+    .description('Play a playlist with the interactive playback console (keybinds + LLM chat).')
+    .action(async (name) => {
       if (!player.mpvAvailable()) {
         console.error('Error: mpv needs to be installed or upgraded.');
         process.exit(1);
       }
-      const cfg = config.loadConfig();
-      const conn = db.connect(cfg);
-      const rows = db.playlistUrls(conn, name);
-      conn.close();
-      if (rows.length === 0) {
-        console.log(`Playlist '${name}' is empty or does not exist.`);
-        return;
-      }
-      const out = config.exportPath(name, cfg);
-      fs.mkdirSync(path.dirname(out), { recursive: true });
-      fs.writeFileSync(out, rows.map((r) => r.url).join('\n') + '\n', 'utf8');
-      player.playPlaylist(out);
+      await playbackConsole(name);
     });
 
   return program;

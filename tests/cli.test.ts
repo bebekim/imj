@@ -366,30 +366,6 @@ test('export command respects custom output path', async (t) => {
   }
 });
 
-test('play command invokes playPlaylist', async (t) => {
-  const env = createIsolatedEnv();
-  const logMock = t.mock.method(console, 'log', () => {});
-  const program = createProgram();
-  program.exitOverride();
-  
-  t.mock.method(player, 'mpvAvailable', () => true);
-  const playMock = t.mock.method(player, 'playPlaylist', () => 0);
-
-  try {
-    await program.parseAsync(['node', 'imj', 'setup', '--music-dir', env.musicDir]);
-    
-    const conn = db.connect();
-    db.addSongToPlaylist(conn, 'https://x/a', 'study');
-    conn.close();
-    
-    await program.parseAsync(['node', 'imj', 'play', 'study']);
-    
-    assert.strictEqual(playMock.mock.callCount(), 1);
-  } finally {
-    env.cleanup();
-  }
-});
-
 test('play command prints message when playlist empty', async (t) => {
   const env = createIsolatedEnv();
   const program = createProgram();
@@ -397,6 +373,10 @@ test('play command prints message when playlist empty', async (t) => {
   let output = '';
   const logMock = t.mock.method(console, 'log', (str: any) => {
     output += str + '\n';
+  });
+  const writeMock = t.mock.method(process.stdout, 'write', (str: any) => {
+    output += str;
+    return true;
   });
   t.mock.method(player, 'mpvAvailable', () => true);
 
