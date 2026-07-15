@@ -120,10 +120,11 @@ export function createProgram(): Command {
           console.log(`FAIL  ${url} (validation)`);
           continue;
         }
-        const created = db.addSongToPlaylist(conn, url, pname);
+        const duration = player.getDuration(url);
+        const created = db.addSongToPlaylist(conn, url, pname, null, duration);
         if (created) {
           imported.push([url, pname]);
-          console.log(`OK    ${url} -> ${pname}`);
+          console.log(`OK    ${url} -> ${pname}${duration != null ? ` (${duration}s)` : ''}`);
         } else {
           console.log(`SKIP  ${url} -> ${pname} (already in playlist)`);
         }
@@ -135,7 +136,7 @@ export function createProgram(): Command {
 
   program
     .command('playlists')
-    .description('List all playlists.')
+    .description('List all playlists with song count and total duration.')
     .action(() => {
       const conn = db.connect();
       const rows = db.listPlaylists(conn);
@@ -144,8 +145,15 @@ export function createProgram(): Command {
         console.log('No playlists.');
         return;
       }
+      const fmtDuration = (s: number) => {
+        if (!s || s <= 0) return '--';
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+      };
       for (const row of rows) {
-        console.log(`${row.name}\t${row.slug}`);
+        console.log(`${row.name}\t${row.slug}\t${row.song_count} songs\t${fmtDuration(row.total_duration)}`);
       }
     });
 

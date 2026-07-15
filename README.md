@@ -44,7 +44,7 @@ imj add 'https://www.youtube.com/playlist?list=...'
 # Validate staged URLs with mpv and import working ones into SQLite
 imj import-staging
 
-# List all playlists
+# List all playlists with song count and total play time
 imj playlists
 
 # Show songs in a playlist
