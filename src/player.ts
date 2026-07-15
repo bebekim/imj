@@ -1,4 +1,6 @@
-import { spawnSync, execSync } from 'node:child_process';
+import { spawnSync, execSync, spawn, type ChildProcess } from 'node:child_process';
+import * as fs from 'node:fs';
+import { socketPath as defaultSocketPath } from './mpv-ipc.js';
 
 // Mockable dependencies object for unit testing subprocesses
 export const deps = {
@@ -40,6 +42,29 @@ export function playPlaylist(playlistFile: string): number {
   return result.status ?? 1;
 }
 
+export function spawnMpvWithIpc(
+  playlistFile: string,
+  sockPath?: string,
+): { proc: ChildProcess; socketPath: string } {
+  if (!mpvAvailable()) {
+    throw new Error('mpv needs to be installed or upgraded.');
+  }
+  const ipcPath = sockPath ?? defaultSocketPath();
+  try { fs.unlinkSync(ipcPath); } catch { /* stale socket */ }
+
+  const proc = spawn('mpv', [
+    '--no-video',
+    '--no-terminal',
+    '--loop-playlist=inf',
+    `--input-ipc-server=${ipcPath}`,
+    `--playlist=${playlistFile}`,
+  ], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  return { proc, socketPath: ipcPath };
+}
+
 export function ytDlpAvailable(): boolean {
   try {
     deps.execSync('which yt-dlp', { stdio: 'ignore' });
@@ -78,6 +103,7 @@ export const player = {
   mpvAvailable,
   validateUrl,
   playPlaylist,
+  spawnMpvWithIpc,
   ytDlpAvailable,
   extractPlaylistUrls,
 };
