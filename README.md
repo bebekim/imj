@@ -4,14 +4,14 @@ A local CLI for managing music, interviews, and jokes URLs and playing them with
 
 ## Requirements
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/)
+- Node.js 24+
+- npm
 - [mpv](https://mpv.io/) — install with `brew install mpv`
 
 ## Install
 
 ```bash
-uv tool install ~/repositories/individual/qnp-music
+npm install -g github:bebekim/imj
 ```
 
 This puts the `imj` command on your PATH.
@@ -70,7 +70,8 @@ imj play study
 ## Development
 
 ```bash
-cd ~/repositories/individual/qnp-music
-uv sync
-uv run pytest
+cd ~/repositories/individual/imj
+npm install
+npm test
+npm run build
 ```
