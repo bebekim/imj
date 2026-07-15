@@ -14,3 +14,4 @@ Current specs:
 - `draft-02-llm-enrichment.md`
 - `03-telegram-bot.md`
 - `04-async-import-staging.md`
+- `05-archive-and-skip-playback.md`
