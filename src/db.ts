@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS play_history (
   song_id integer not null references songs(id),
   played_at text not null
 );
+
+CREATE TABLE IF NOT EXISTS liked_playlist_songs (
+  playlist_id integer not null references playlists(id),
+  song_id integer not null references songs(id),
+  liked_at text not null,
+  primary key (playlist_id, song_id)
+);
 `;
 
 export function connect(cfg?: Record<string, any> | null): DatabaseSync {
@@ -91,4 +98,48 @@ export function playlistUrls(conn: DatabaseSync, playlistName: string): any[] {
     WHERE p.name = ?
     ORDER BY ps.position
   `).all(playlistName);
+}
+
+export function getSongByUrl(conn: DatabaseSync, url: string): any {
+  return conn.prepare('SELECT * FROM songs WHERE url = ?').get(url);
+}
+
+export function likeSong(conn: DatabaseSync, playlistName: string, url: string): boolean {
+  const playlist = getPlaylistByName(conn, playlistName);
+  if (!playlist) return false;
+  const song = getSongByUrl(conn, url);
+  if (!song) return false;
+  const existing = conn.prepare('SELECT 1 FROM liked_playlist_songs WHERE playlist_id = ? AND song_id = ?').get(playlist.id, song.id);
+  if (existing) return false;
+  conn.prepare('INSERT INTO liked_playlist_songs (playlist_id, song_id, liked_at) VALUES (?, ?, ?)').run(playlist.id, song.id, new Date().toISOString());
+  return true;
+}
+
+export function unlikeSong(conn: DatabaseSync, playlistName: string, url: string): boolean {
+  const playlist = getPlaylistByName(conn, playlistName);
+  if (!playlist) return false;
+  const song = getSongByUrl(conn, url);
+  if (!song) return false;
+  const result = conn.prepare('DELETE FROM liked_playlist_songs WHERE playlist_id = ? AND song_id = ?').run(playlist.id, song.id);
+  return result.changes > 0;
+}
+
+export function isSongLiked(conn: DatabaseSync, playlistName: string, url: string): boolean {
+  const playlist = getPlaylistByName(conn, playlistName);
+  if (!playlist) return false;
+  const song = getSongByUrl(conn, url);
+  if (!song) return false;
+  const row = conn.prepare('SELECT 1 FROM liked_playlist_songs WHERE playlist_id = ? AND song_id = ?').get(playlist.id, song.id);
+  return row !== undefined;
+}
+
+export function likedSongs(conn: DatabaseSync, playlistName: string): any[] {
+  const playlist = getPlaylistByName(conn, playlistName);
+  if (!playlist) return [];
+  return conn.prepare(`
+    SELECT s.url, s.title, lps.liked_at FROM songs s
+    JOIN liked_playlist_songs lps ON lps.song_id = s.id
+    WHERE lps.playlist_id = ?
+    ORDER BY lps.liked_at DESC
+  `).all(playlist.id);
 }
