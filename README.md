@@ -52,6 +52,22 @@ imj export study
 imj play study
 ```
 
+## Playback keys
+
+`imj play` inherits `mpv` keybinds. Useful defaults:
+
+| Key | Action |
+|---|---|
+| `>` or `Enter` | Next playlist item |
+| `<` | Previous playlist item |
+| `p` or `Space` | Pause/play |
+| `m` | Mute |
+| `Left` / `Right` | Seek backward/forward 5 seconds |
+| `Up` / `Down` | Seek backward/forward 1 minute |
+| `9` / `0` | Volume down/up |
+| `q` | Quit |
+| `?` | Show active keybindings |
+
 ## How it works
 
 1. **`add`** writes URLs to a staging file (`staging.tsv`), newest first. Nothing goes into the database yet.
