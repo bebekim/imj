@@ -98,6 +98,28 @@ export function extractPlaylistUrls(playlistUrl: string): string[] {
   }
 }
 
+export function getDuration(url: string): number | null {
+  if (!ytDlpAvailable()) {
+    return null;
+  }
+  try {
+    const result = deps.spawnSync('yt-dlp', [
+      '--print', '%(duration)s',
+      '--no-download',
+      url,
+    ], { encoding: 'utf8', timeout: 15000 });
+
+    if (result.status !== 0) {
+      return null;
+    }
+    const output = (result.stdout ?? '').trim();
+    const seconds = parseInt(output, 10);
+    return isNaN(seconds) ? null : seconds;
+  } catch {
+    return null;
+  }
+}
+
 // Group into a mockable player object
 export const player = {
   mpvAvailable,
@@ -106,4 +128,5 @@ export const player = {
   spawnMpvWithIpc,
   ytDlpAvailable,
   extractPlaylistUrls,
+  getDuration,
 };

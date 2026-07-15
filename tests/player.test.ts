@@ -39,3 +39,25 @@ test('mpvAvailable returns true/false correctly', (t) => {
   assert.strictEqual(player.mpvAvailable(), false);
   mockExecFailure.mock.restore();
 });
+
+test('getDuration returns seconds from yt-dlp output', (t) => {
+  t.mock.method(deps, 'execSync', () => Buffer.from('/usr/bin/yt-dlp'));
+  t.mock.method(deps, 'spawnSync', () => ({ status: 0, stdout: '247\n' }));
+
+  assert.strictEqual(player.getDuration('https://x'), 247);
+});
+
+test('getDuration returns null on yt-dlp failure', (t) => {
+  t.mock.method(deps, 'execSync', () => Buffer.from('/usr/bin/yt-dlp'));
+  t.mock.method(deps, 'spawnSync', () => ({ status: 1, stdout: '' }));
+
+  assert.strictEqual(player.getDuration('https://x'), null);
+});
+
+test('getDuration returns null when yt-dlp not available', (t) => {
+  t.mock.method(deps, 'execSync', () => {
+    throw new Error('Not found');
+  });
+
+  assert.strictEqual(player.getDuration('https://x'), null);
+});

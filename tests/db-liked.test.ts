@@ -176,3 +176,81 @@ test('getSongByUrl returns undefined for missing URL', () => {
     env.cleanup();
   }
 });
+
+test('playlist lookup works by slug', () => {
+  const env = createIsolatedEnv();
+  try {
+    const conn = db.connect();
+    db.addSongToPlaylist(conn, 'https://song1', 'Late Night Jazz', 'Track A');
+    db.addSongToPlaylist(conn, 'https://song2', 'Late Night Jazz', 'Track B');
+
+    // playlistUrls by slug
+    const rows = db.playlistUrls(conn, 'late-night-jazz');
+    assert.strictEqual(rows.length, 2);
+
+    // getPlaylistByName by slug
+    const playlist = db.getPlaylistByName(conn, 'late-night-jazz');
+    assert.ok(playlist);
+    assert.strictEqual(playlist.name, 'Late Night Jazz');
+
+    // likeSong by slug
+    assert.strictEqual(db.likeSong(conn, 'late-night-jazz', 'https://song1'), true);
+    assert.ok(db.isSongLiked(conn, 'late-night-jazz', 'https://song1'));
+
+    // likedSongs by slug
+    const liked = db.likedSongs(conn, 'late-night-jazz');
+    assert.strictEqual(liked.length, 1);
+    assert.strictEqual(liked[0].url, 'https://song1');
+
+    conn.close();
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('listPlaylists returns song count and total duration', () => {
+  const env = createIsolatedEnv();
+  try {
+    const conn = db.connect();
+    db.addSongToPlaylist(conn, 'https://song1', 'jazz', 'Track A', 180);
+    db.addSongToPlaylist(conn, 'https://song2', 'jazz', 'Track B', 240);
+    db.addSongToPlaylist(conn, 'https://song3', 'study', 'Track C', 60);
+
+    const rows = db.listPlaylists(conn);
+    assert.strictEqual(rows.length, 2);
+
+    const jazz = rows.find((r) => r.name === 'jazz');
+    assert.ok(jazz);
+    assert.strictEqual(jazz.song_count, 2);
+    assert.strictEqual(jazz.total_duration, 420);
+
+    const study = rows.find((r) => r.name === 'study');
+    assert.ok(study);
+    assert.strictEqual(study.song_count, 1);
+    assert.strictEqual(study.total_duration, 60);
+
+    conn.close();
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('listPlaylists returns zero count and duration for empty playlist', () => {
+  const env = createIsolatedEnv();
+  try {
+    const conn = db.connect();
+    db.getOrCreatePlaylist(conn, 'empty');
+
+    const rows = db.listPlaylists(conn);
+    assert.strictEqual(rows.length, 1);
+
+    const empty = rows.find((r) => r.name === 'empty');
+    assert.ok(empty);
+    assert.strictEqual(empty.song_count, 0);
+    assert.strictEqual(empty.total_duration, 0);
+
+    conn.close();
+  } finally {
+    env.cleanup();
+  }
+});

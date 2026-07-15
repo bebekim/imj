@@ -7,7 +7,8 @@ export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS songs (
   id integer primary key,
   url text not null unique,
-  title text
+  title text,
+  duration integer
 );
 
 CREATE TABLE IF NOT EXISTS playlists (
@@ -42,6 +43,11 @@ export function connect(cfg?: Record<string, any> | null): DatabaseSync {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const conn = new DatabaseSync(p);
   conn.exec(SCHEMA);
+  // Migration: add duration column if missing (existing DBs created before this column)
+  const cols = conn.prepare('PRAGMA table_info(songs)').all() as any[];
+  if (!cols.some((c) => c.name === 'duration')) {
+    conn.exec('ALTER TABLE songs ADD COLUMN duration integer');
+  }
   return conn;
 }
 
@@ -57,10 +63,10 @@ export function getOrCreatePlaylist(conn: DatabaseSync, name: string): number {
 }
 
 export function getPlaylistByName(conn: DatabaseSync, name: string): any {
-  return conn.prepare('SELECT * FROM playlists WHERE name = ?').get(name);
+  return conn.prepare('SELECT * FROM playlists WHERE name = ? OR slug = ?').get(name, name);
 }
 
-export function addSongToPlaylist(conn: DatabaseSync, url: string, playlistName: string, title?: string | null): boolean {
+export function addSongToPlaylist(conn: DatabaseSync, url: string, playlistName: string, title?: string | null, duration?: number | null): boolean {
   const pid = getOrCreatePlaylist(conn, playlistName);
   let song = conn.prepare('SELECT id FROM songs WHERE url = ?').get(url) as any;
   let sid: number;
@@ -69,8 +75,11 @@ export function addSongToPlaylist(conn: DatabaseSync, url: string, playlistName:
     if (title) {
       conn.prepare('UPDATE songs SET title = ? WHERE id = ?').run(title, sid);
     }
+    if (duration != null) {
+      conn.prepare('UPDATE songs SET duration = ? WHERE id = ?').run(duration, sid);
+    }
   } else {
-    conn.prepare('INSERT INTO songs (url, title) VALUES (?, ?)').run(url, title ?? null);
+    conn.prepare('INSERT INTO songs (url, title, duration) VALUES (?, ?, ?)').run(url, title ?? null, duration ?? null);
     const lastRow = conn.prepare('SELECT last_insert_rowid() as id').get() as any;
     sid = lastRow.id;
   }
@@ -87,7 +96,16 @@ export function addSongToPlaylist(conn: DatabaseSync, url: string, playlistName:
 }
 
 export function listPlaylists(conn: DatabaseSync): any[] {
-  return conn.prepare('SELECT name, slug FROM playlists ORDER BY name').all();
+  return conn.prepare(`
+    SELECT p.name, p.slug,
+      COUNT(ps.song_id) AS song_count,
+      COALESCE(SUM(s.duration), 0) AS total_duration
+    FROM playlists p
+    LEFT JOIN playlist_songs ps ON ps.playlist_id = p.id
+    LEFT JOIN songs s ON s.id = ps.song_id
+    GROUP BY p.id
+    ORDER BY p.name
+  `).all();
 }
 
 export function playlistUrls(conn: DatabaseSync, playlistName: string): any[] {
@@ -95,9 +113,9 @@ export function playlistUrls(conn: DatabaseSync, playlistName: string): any[] {
     SELECT s.url, s.title FROM songs s
     JOIN playlist_songs ps ON ps.song_id = s.id
     JOIN playlists p ON p.id = ps.playlist_id
-    WHERE p.name = ?
+    WHERE p.name = ? OR p.slug = ?
     ORDER BY ps.position
-  `).all(playlistName);
+  `).all(playlistName, playlistName);
 }
 
 export function getSongByUrl(conn: DatabaseSync, url: string): any {
