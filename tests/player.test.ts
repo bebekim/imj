@@ -61,3 +61,41 @@ test('getDuration returns null when yt-dlp not available', (t) => {
 
   assert.strictEqual(player.getDuration('https://x'), null);
 });
+
+test('validateUrlAsync resolves true when mpv exits 0', async (t) => {
+  t.mock.method(deps, 'execSync', () => Buffer.from('/usr/bin/mpv'));
+  t.mock.method(deps, 'spawn', () => {
+    const ee: any = { on: (ev: string, cb: Function) => { if (ev === 'exit') setTimeout(() => cb(0), 0); }, kill: () => {} };
+    return ee;
+  });
+
+  assert.strictEqual(await player.validateUrlAsync('https://x'), true);
+});
+
+test('validateUrlAsync resolves false when mpv exits non-zero', async (t) => {
+  t.mock.method(deps, 'execSync', () => Buffer.from('/usr/bin/mpv'));
+  t.mock.method(deps, 'spawn', () => {
+    const ee: any = { on: (ev: string, cb: Function) => { if (ev === 'exit') setTimeout(() => cb(1), 0); }, kill: () => {} };
+    return ee;
+  });
+
+  assert.strictEqual(await player.validateUrlAsync('https://x'), false);
+});
+
+test('validateUrlAsync resolves false on timeout', async (t) => {
+  t.mock.method(deps, 'execSync', () => Buffer.from('/usr/bin/mpv'));
+  t.mock.method(deps, 'spawn', () => {
+    const ee: any = { on: () => {}, kill: () => {} };
+    return ee;
+  });
+
+  assert.strictEqual(await player.validateUrlAsync('https://x', 50), false);
+});
+
+test('validateUrlAsync resolves false when mpv not available', async (t) => {
+  t.mock.method(deps, 'execSync', () => {
+    throw new Error('Not found');
+  });
+
+  assert.strictEqual(await player.validateUrlAsync('https://x'), false);
+});

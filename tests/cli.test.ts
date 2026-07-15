@@ -389,3 +389,62 @@ test('play command prints message when playlist empty', async (t) => {
     env.cleanup();
   }
 });
+
+test('import-staging --playlist imports only entries for that playlist', async (t) => {
+  const env = createIsolatedEnv();
+  const logMock = t.mock.method(console, 'log', () => {});
+  const program = createProgram();
+  program.exitOverride();
+
+  t.mock.method(player, 'mpvAvailable', () => true);
+  t.mock.method(player, 'validateUrl', () => true);
+
+  try {
+    await program.parseAsync(['node', 'imj', 'setup', '--music-dir', env.musicDir]);
+
+    const p = config.stagingPath();
+    staging.prependEntry(p, 'https://a', 'study');
+    staging.prependEntry(p, 'https://b', 'chill');
+    staging.prependEntry(p, 'https://c', 'study');
+
+    await program.parseAsync(['node', 'imj', 'import-staging', '--playlist', 'study']);
+
+    const conn = db.connect();
+    const studyRows = db.playlistUrls(conn, 'study').map(r => r.url);
+    const chillRows = db.playlistUrls(conn, 'chill').map(r => r.url);
+    assert.ok(studyRows.includes('https://a'));
+    assert.ok(studyRows.includes('https://c'));
+    assert.deepStrictEqual(chillRows, []);
+
+    const remaining = staging.readEntries(p);
+    assert.deepStrictEqual(remaining, [['https://b', 'chill']]);
+    conn.close();
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('import-staging --playlist outputs message when no matching entries', async (t) => {
+  const env = createIsolatedEnv();
+  const program = createProgram();
+  program.exitOverride();
+
+  let output = '';
+  const logMock = t.mock.method(console, 'log', (str: any) => {
+    output += str + '\n';
+  });
+  t.mock.method(player, 'mpvAvailable', () => true);
+
+  try {
+    await program.parseAsync(['node', 'imj', 'setup', '--music-dir', env.musicDir]);
+
+    const p = config.stagingPath();
+    staging.prependEntry(p, 'https://a', 'study');
+
+    await program.parseAsync(['node', 'imj', 'import-staging', '--playlist', 'chill']);
+
+    assert.ok(output.includes("No staged entries for playlist 'chill'"));
+  } finally {
+    env.cleanup();
+  }
+});

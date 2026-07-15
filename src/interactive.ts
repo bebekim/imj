@@ -11,14 +11,16 @@ import { chat, type ChatMessage, type LlmContext } from './llm.js';
 // Playback console — single raw-mode session for the whole playback
 //
 // Shortcut mode (default):
-//   space   pause/resume      n   next song         b   prev song
+//   space   pause/resume      n   next song         p   prev song
 //   m       toggle mute       q   quit playback
 //   + / -   volume up/down    ←/→ seek ±10s
 //   l       like current song
+//   a       add a song (enter add mode — type URL, press Enter)
 //   c       enter type mode
 //
 // Type mode (press c, Esc to exit):
 //   Type commands or natural language, press Enter to send.
+//   add <url>         add a song to the current playlist (validated async, queued live)
 //   like              like current song
 //   liked             show liked songs in this playlist
 //   vol 50            set volume to 50
@@ -29,8 +31,9 @@ import { chat, type ChatMessage, type LlmContext } from './llm.js';
 
 const HELP = `
 Playback console — '${'playlist'}'
-  Shortcuts: space pause | n next | b prev | m mute | l like | q quit
+  Shortcuts: space pause | n next | p prev | m mute | l like | a add | q quit
   Press c to type a command or talk to the assistant (Esc to return)
+    add <url>  add a song to this playlist (validated, queued without stopping playback)
 `;
 
 export async function playbackConsole(playlistName: string): Promise<void> {
@@ -177,7 +180,7 @@ export async function playbackConsole(playlistName: string): Promise<void> {
         case 'n':
           if (mpv) { try { await mpv.send(['playlist-next', 'force']); print('⏭ Next'); } catch { /* */ } }
           return;
-        case 'b':
+        case 'p':
           if (mpv) { try { await mpv.send(['playlist-prev', 'force']); print('⏮ Prev'); } catch { /* */ } }
           return;
         case 'm':
@@ -191,6 +194,11 @@ export async function playbackConsole(playlistName: string): Promise<void> {
           return;
         case 'l':
           await processCommand('like', ctx, mpv, playlistName, history, print, stdout);
+          refreshStatus();
+          return;
+        case 'a':
+          typeMode = true;
+          lineBuffer = 'add ';
           refreshStatus();
           return;
         case 'c':
@@ -352,9 +360,25 @@ async function processCommand(
       return;
     }
 
+    case 'add': {
+      if (!arg) { print('Usage: add <url>'); return; }
+      const url = config.normalizeUrl(arg.replace(/^['"]+|['"]+$/g, ''));
+      print(`Validating '${url}'...`);
+      const ok = await player.validateUrlAsync(url);
+      if (!ok) { print(`Could not validate '${url}'. Not added.`); return; }
+      const conn = db.connect();
+      const added = db.addSongToPlaylist(conn, url, playlistName);
+      conn.close();
+      if (mpv) {
+        try { await mpv.send(['loadfile', url, 'append']); } catch { /* */ }
+      }
+      print(added ? `+ Added '${url}' to '${playlistName}'` : `Already in '${playlistName}'`);
+      return;
+    }
+
     case 'help':
     case '?':
-      print(`Commands: like, liked, vol <n>, seek <n>, pause, next, prev, mute, status, q\nOr type anything to talk to the assistant.`);
+      print(`Commands: add <url>, like, liked, vol <n>, seek <n>, pause, next, prev, mute, status, q\nOr type anything to talk to the assistant.`);
       return;
   }
 

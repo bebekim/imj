@@ -6,6 +6,7 @@ import { socketPath as defaultSocketPath } from './mpv-ipc.js';
 export const deps = {
   execSync,
   spawnSync,
+  spawn,
 };
 
 export function mpvAvailable(): boolean {
@@ -30,6 +31,35 @@ export function validateUrl(url: string, timeoutMs: number = 20000): boolean {
   } catch {
     return false;
   }
+}
+
+export function validateUrlAsync(url: string, timeoutMs: number = 20000): Promise<boolean> {
+  if (!mpvAvailable()) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    let proc: ChildProcess;
+    try {
+      proc = deps.spawn('mpv', ['--no-video', '--length=10', url], {
+        stdio: 'ignore',
+      });
+    } catch {
+      resolve(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch { /* */ }
+      resolve(false);
+    }, timeoutMs);
+    proc.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
+    proc.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
 }
 
 export function playPlaylist(playlistFile: string): number {
@@ -124,6 +154,7 @@ export function getDuration(url: string): number | null {
 export const player = {
   mpvAvailable,
   validateUrl,
+  validateUrlAsync,
   playPlaylist,
   spawnMpvWithIpc,
   ytDlpAvailable,

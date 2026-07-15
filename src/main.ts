@@ -91,8 +91,9 @@ export function createProgram(): Command {
 
   program
     .command('import-staging')
-    .description('Validate staged entries with mpv, import working non-duplicates, flush them.')
-    .action(() => {
+    .description('Validate staged entries with mpv, import working non-duplicates, flush them. Use --playlist to import only entries for a specific playlist.')
+    .option('--playlist <name>', 'Only import staged entries for this playlist.')
+    .action((options) => {
       if (!player.mpvAvailable()) {
         console.error('Error: mpv needs to be installed or upgraded.');
         process.exit(1);
@@ -104,26 +105,34 @@ export function createProgram(): Command {
         console.log('No staged entries to import.');
         return;
       }
+      const filtered = options.playlist
+        ? entries.filter(([, pname]) => pname === options.playlist)
+        : entries;
+      if (filtered.length === 0) {
+        console.log(`No staged entries for playlist '${options.playlist}'.`);
+        return;
+      }
       const conn = db.connect(cfg);
       const imported: [string, string][] = [];
       const failed: [string, string][] = [];
       const seen = new Set<string>();
-      
-      for (const [url, pname] of entries) {
+
+      for (const [rawUrl, pname] of filtered) {
+        const url = config.normalizeUrl(rawUrl);
         const key = `${url}|||${pname}`;
         if (seen.has(key)) {
           continue;
         }
         seen.add(key);
         if (!player.validateUrl(url)) {
-          failed.push([url, pname]);
+          failed.push([rawUrl, pname]);
           console.log(`FAIL  ${url} (validation)`);
           continue;
         }
         const duration = player.getDuration(url);
         const created = db.addSongToPlaylist(conn, url, pname, null, duration);
         if (created) {
-          imported.push([url, pname]);
+          imported.push([rawUrl, pname]);
           console.log(`OK    ${url} -> ${pname}${duration != null ? ` (${duration}s)` : ''}`);
         } else {
           console.log(`SKIP  ${url} -> ${pname} (already in playlist)`);
