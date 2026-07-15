@@ -4,92 +4,80 @@ Status: ready.
 
 ## Intent
 
-A user listening to a playlist needs two fast actions:
+A user listening in `imj play NAME` needs keybinds inside the player:
 
-- skip the current song without changing the playlist
+- skip the current song
+- go back to the previous song
 - archive the current song so it stops playing now and is removed from that
   playlist for future `show`, `export`, and `play`
 
 Archiving is playlist-scoped. A song archived from `study` may still exist in
 another playlist.
 
+## Playback Keybinds
+
+`imj play NAME` should add these bindings for that mpv session:
+
+| Key | Action |
+| --- | --- |
+| `n` | next song |
+| `b` | previous song |
+| `a` | archive current song from this playlist and skip it |
+
+Keep mpv defaults too:
+
+| Key | mpv default |
+| --- | --- |
+| `>` or `Enter` | next playlist item |
+| `<` | previous playlist item |
+| `p` or `Space` | pause/play |
+| `m` | mute |
+| `q` | quit |
+| `?` | show active keybindings |
+
 ## User Flow
 
-While `imj play study` is running, the user hears an unwanted song.
+While `imj play study` is running:
 
-For a one-time skip:
+- press `n` to skip a song once
+- press `b` to go back
+- press `a` when the song should be removed from `study`
 
-```bash
-imj skip
-```
+After `a`, the current song should stop immediately and should not appear in
+future `imj show study`, `imj export study`, or `imj play study` output.
 
-For a permanent removal from that playlist:
-
-```bash
-imj archive-current
-```
-
-For cleanup outside playback:
+For cleanup outside playback, keep a direct command:
 
 ```bash
-imj archive study URL
-```
-
-## CLI Surface
-
-```bash
-imj skip
-imj archive-current
 imj archive PLAYLIST URL
-```
-
-Behavior:
-
-- `imj skip` tells the active `mpv` session to move to the next playlist item.
-- `imj archive-current` finds the active `mpv` session, reads the current URL,
-  removes that song from the active playlist in SQLite, records an archive row,
-  and tells `mpv` to stop playing that item immediately.
-- `imj archive PLAYLIST URL` archives a known URL from a playlist without
-  requiring playback to be running.
-- `imj play NAME` should only include active playlist rows.
-- `imj show NAME` and `imj export NAME` should only show/export active playlist
-  rows.
-
-If no player is running:
-
-```text
-No active imj playback session.
-```
-
-If the current URL is not in the active playlist:
-
-```text
-Current song is not in playlist 'study'.
 ```
 
 ## Architecture
 
-Keep `mpv` as the player. Add only its local IPC socket for control commands.
-Do not add a playback daemon or new dependency.
+Keep `mpv` as the player. Do not add a playback daemon or new dependency.
 
-When `imj play NAME` starts `mpv`, pass an IPC socket:
+When `imj play NAME` starts `mpv`, load a small bundled Lua script and pass the
+playlist name:
 
 ```bash
-mpv --no-video --loop-playlist=inf --input-ipc-server=<runtime-dir>/mpv.sock --playlist=<file>
+mpv --no-video --loop-playlist=inf \
+  --script=<dist-or-src>/mpv/imj.lua \
+  --script-opts=imj_playlist=NAME,imj_bin=<imj-bin-path> \
+  --playlist=<generated-playlist-file>
 ```
 
-Also write a small playback session file under the configured music directory:
+The Lua script owns the live keybinds:
 
-```json
-{
-  "playlist": "study",
-  "socket": "/path/to/mpv.sock",
-  "started_at": "2026-07-15T00:00:00.000Z"
-}
-```
+- `n`: `playlist-next force`
+- `b`: `playlist-prev force`
+- `a`:
+  1. read mpv's current `path`
+  2. run `imj archive NAME PATH`
+  3. if archive succeeds, run `playlist-remove current`
+  4. if removal fails, run `playlist-next force`
 
-The session file is best-effort state. If the socket is missing or unusable,
-commands should report no active playback and remove the stale session file.
+Use `mp.command_native_async` or `run` for the archive subprocess so playback
+does not block on SQLite work.
 
 ## SQLite Changes
 
@@ -113,58 +101,33 @@ Archive flow:
 2. Insert or replace into `archived_playlist_songs`.
 3. Delete the row from `playlist_songs`.
 
-This keeps existing active playlist queries simple because archived songs are no
-longer active playlist rows. Re-adding the same URL to the same playlist later
-is allowed because the active membership row no longer exists.
+This keeps active playlist queries simple because archived songs are no longer
+active playlist rows. Re-adding the same URL to the same playlist later is
+allowed because the active membership row no longer exists.
 
-## mpv IPC
+## Interface Rules
 
-Use JSON IPC over the socket.
-
-Commands needed:
-
-- get current URL:
-
-```json
-{"command":["get_property","path"]}
-```
-
-- skip current item:
-
-```json
-{"command":["playlist-next","force"]}
-```
-
-- remove current item after archive:
-
-```json
-{"command":["playlist-remove","current"]}
-```
-
-If `playlist-remove current` fails, fall back to `playlist-next force` so the
-user is not stuck hearing the archived song.
-
-## Interface Notes
-
-`mpv` already supports keyboard skipping while it owns the terminal, but `imj
-skip` exists so the action also works from another terminal, scripts, and future
-bot interfaces.
-
-`archive-current` is the important persistent action. It is the "I do not want
-this in this playlist anymore" command.
+- The primary live interface is keybinds, not a second terminal command.
+- `imj archive PLAYLIST URL` exists for the Lua script and for manual cleanup.
+- If the archive command cannot find the URL in the playlist, show a short OSD
+  message and leave playback alone.
+- The Lua script should show short OSD messages:
+  - `Archived`
+  - `Archive failed`
+  - `Not in playlist`
 
 ## Acceptance Checks
 
-- `imj play study` starts `mpv` with `--input-ipc-server`.
-- `imj skip` sends `playlist-next force` to the active socket.
-- `imj archive-current` reads the current URL from `mpv`, removes that URL from
-  the active playlist in SQLite, records `archived_playlist_songs`, and removes
-  or skips the current item in `mpv`.
+- `imj play study` starts `mpv` with the IMJ Lua script and playlist script opt.
+- The Lua script binds `n` to `playlist-next force`.
+- The Lua script binds `b` to `playlist-prev force`.
+- The Lua script binds `a` to archive the current `path` from the active
+  playlist and then remove or skip the current mpv playlist item.
 - `imj archive PLAYLIST URL` removes that URL from only the named playlist.
 - `imj show`, `imj export`, and future `imj play` calls do not include archived
   playlist memberships.
-- Re-adding an archived URL to the same playlist creates a new active membership.
-- A stale playback session file is ignored and cleaned up.
+- Re-adding an archived URL to the same playlist creates a new active
+  membership.
 
 ## Out Of Scope
 
