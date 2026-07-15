@@ -53,7 +53,7 @@ export function connect(cfg?: Record<string, any> | null): DatabaseSync {
 
 export function getOrCreatePlaylist(conn: DatabaseSync, name: string): number {
   const slug = config.slugify(name);
-  const row = conn.prepare('SELECT id FROM playlists WHERE name = ?').get(name) as any;
+  const row = conn.prepare('SELECT id FROM playlists WHERE name = ? OR slug = ?').get(name, name) as any;
   if (row) {
     return row.id;
   }

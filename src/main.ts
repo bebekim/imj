@@ -152,8 +152,9 @@ export function createProgram(): Command {
         if (h > 0) return `${h}h ${m}m`;
         return `${m}m`;
       };
+      console.log('Name\tSlug\tSongs\tDuration');
       for (const row of rows) {
-        console.log(`${row.name}\t${row.slug}\t${row.song_count} songs\t${fmtDuration(row.total_duration)}`);
+        console.log(`${row.name}\t${row.slug}\t${row.song_count}\t${fmtDuration(row.total_duration)}`);
       }
     });
 
@@ -194,14 +195,15 @@ export function createProgram(): Command {
     });
 
   program
-    .command('play <name>')
-    .description('Play a playlist with the interactive playback console (keybinds + LLM chat).')
-    .action(async (name) => {
+    .command('play [name]')
+    .description('Play a playlist with the interactive playback console (keybinds + LLM chat). Defaults to the default playlist.')
+    .action(async (name?: string) => {
       if (!player.mpvAvailable()) {
         console.error('Error: mpv needs to be installed or upgraded.');
         process.exit(1);
       }
-      await playbackConsole(name);
+      const playlistName = name ?? config.defaultPlaylistName();
+      await playbackConsole(playlistName);
     });
 
   return program;
